@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="Black">
+    <option name="sdkName" value="gis" />
+  </component>
+  <component name="ProjectRootManager" version="2" project-jdk-name="Python 3.10.4 WSL (Ubuntu-20.04): (/root/anaconda3/envs/gis/bin/python3) (2)" project-jdk-type="Python SDK" />
+</project>
