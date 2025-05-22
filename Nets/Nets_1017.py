@@ -9,67 +9,9 @@ import matplotlib.pyplot as plt
 import umap
 counter = 0
 counter2 = 0
-
-# def sum_feature_maps(tensor):
-#     global counter
-#     """
-#     输入形状为 (640, 128, 128) 的张量特征，输出二维栅格特征图。
-#     输出的特征图是将 640 个 [128, 128] 特征相加的结果。
-
-#     :param tensor: 输入张量，形状为 (640, 128, 128)
-#     :return: 二维栅格特征图，形状为 (128, 128)
-#     """
-#     # 检查输入张量的形状是否正确
-#     # if tensor.shape != (640, 128, 128):
-#     #     raise ValueError(f"输入张量形状必须为 (640, 128, 128)，但实际形状为 {tensor.shape}")
-
-#     # 在第 0 维度上对 640 个特征图进行求和
-#     result = torch.mean(tensor, dim=0)
-    
-
-#     plt.imshow(result.detach().cpu().numpy(), cmap='viridis')
-#     plt.title("Summed Feature Map")
-#     # plt.colorbar()
-#     plt.savefig(f"{str(counter)}.png",dpi = 600)
-#     # plt =None
-#     counter+=1
-#     plt.clf()
-
-#     return result
-# def visualize_with_umap(tensor):
-#     global counter2
-#     """
-#     使用 UMAP 对输入张量 (Batch, H, W) 进行二维可视化。
-    
-#     :param tensor: 输入张量，形状为 (Batch, H, W)
-#     :return: None，直接绘制二维散点图
-#     """
-#     # 检查输入张量的形状是否正确
-#     if len(tensor.shape) != 3:
-#         raise ValueError(f"输入张量形状必须为 (Batch, H, W)，但实际形状为 {tensor.shape}")
-    
-#     batch_size, height, width = tensor.shape
-
-#     # 将张量展平为 (Batch, H * W)，以便作为 UMAP 的输入
-#     flattened_tensor = tensor.view(batch_size, -1).detach().cpu().numpy()
-
-#     # 初始化 UMAP 降维器，目标维度为 2
-#     reducer = umap.UMAP(n_components=2, random_state=42)
-
-#     # 使用 UMAP 进行降维
-#     embedding = reducer.fit_transform(flattened_tensor)
-
-#     # 可视化二维嵌入结果
-#     plt.figure(figsize=(10, 8))
-#     plt.scatter(embedding[:, 0], embedding[:, 1], s=10, alpha=0.7)
-#     plt.title("UMAP Visualization of (Batch, H, W) Tensor")
-#     plt.xlabel("UMAP Dimension 1")
-#     plt.ylabel("UMAP Dimension 2")
-#     plt.colorbar(label="Sample Density (approximate)", orientation="vertical")
-#     plt.savefig(f"{str(counter2)}_UMAP.png",dpi = 600)
-#     counter2+=1
-#     plt.clf()
-#     # plt.show()
+"""
+   此版本为seq=1版本
+"""
 
 
 class AdaptivePositionEncoder(nn.Module):
@@ -164,7 +106,7 @@ class MambaEncoder(nn.Module):
 
 class CrossAttentionModule(nn.Module):
     """
-    交叉注意力模块，用于融合不同种类的嵌入。
+    RGF
     """
     def __init__(self, embed_dim=64, num_heads=4):
         super(CrossAttentionModule, self).__init__()
@@ -183,7 +125,7 @@ class CrossAttentionModule(nn.Module):
 
     def forward(self, query, key, value):
         """
-        query, key, value: [batch_size, seq_len, embed_dim]
+        query, key, value: [batch_size, seq_len, embed_dim]-> Tensor add
         """
         attn_output, _ = self.cross_attn(query, key, value)  # attn_output: [batch_size, seq_len, embed_dim]
         out = self.layer_norm(query + attn_output)
@@ -219,7 +161,7 @@ class FeatureMamba(nn.Module):
 
 class TransformerRegressor(nn.Module):
     """
-    编码器-解码器结构的Transformer回归模型，用于预测GWS变量。
+    编码器-解码器结构回归模型，用于预测GWS变量。
     """
     def __init__(self,  LC_num_classes,
                  static_dim=3, dynamic_dim=16, embed_dim=64, num_heads=4,

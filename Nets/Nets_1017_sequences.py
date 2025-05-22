@@ -5,6 +5,14 @@ import math
 from efficient_kan import KAN, KANLinear
 import Debug
 from mamba_ssm import Mamba
+import matplotlib.pyplot as plt
+import umap
+counter = 0
+counter2 = 0
+"""
+    序列Geo-Mamba实现，需要修改Datasets，utils.py修改为相应的序列格式，输入格式为(batchsize,seqlen,factors_dim)
+"""
+
 class AdaptivePositionEncoder(nn.Module):
     """
     自适应位置编码器，输入为纬度和经度，输出为位置嵌入。
@@ -75,28 +83,25 @@ class MambaEncoder(nn.Module):
             ) for _ in range(num_layers)
         ])
         self.layer_norm = nn.RMSNorm(mambadim)
+        self.layer_norm2= nn.RMSNorm(mambadim)
         self.GELU = nn.GELU()
         self.MLP = nn.Sequential(
             # KANLinear(mambadim,256),
-            nn.Linear(mambadim,1024),
+            nn.Linear(mambadim,mambadim*2),
             nn.GELU(),
-            nn.Dropout(0.1),
-            nn.Linear(1024,mambadim),
-            nn.Dropout(0.1),
+            nn.Linear(mambadim*2,mambadim),
             nn.GELU()
         )
     def forward(self, x):
+        residual2 =x
         for layer in self.layers:
             residual = x
             x = layer(x)
-            # x = x + residual  # 残差连接
-            # residual = x
-            # x = self.layer_norm(x)
-            self.MLP(x)
+            # x = self.layer_norm(x+residual)
+            x = self.MLP(x)
             x = x + residual  # 残差连接
             x = self.layer_norm(x)
-            # x = self.GELU(x)
-        return x
+        return self.layer_norm2(x+residual2)
 
 class CrossAttentionModule(nn.Module):
     """
@@ -145,11 +150,13 @@ class FeatureMamba(nn.Module):
         self.LayerNorm_x= nn.RMSNorm(embed_dim)
     def forward(self, x):
         residual = x  # 残差连接
-        tmp = x.view(x.size(0), x.size(2), x.size(1))  # B 20,1
+        seq =x.size(1)
+        factorsNum = x.size(2)
+        tmp = x.view(x.size(0), seq*factorsNum,1)  # B 20,1
         tmp = self.tmpembed(tmp)  # B，20,20 64
         dynamic_encoded = self.mamba_encoder(tmp)
         dynamic_encoded = self.tmpembed_t(dynamic_encoded)
-        dynamic_encoded = dynamic_encoded.view(x.size(0), x.size(1), x.size(2))
+        dynamic_encoded = dynamic_encoded.view(x.size(0), seq, factorsNum)
         return self.LayerNorm_x(dynamic_encoded + residual)  # 加上残差连接
 
 
@@ -159,7 +166,7 @@ class TransformerRegressor(nn.Module):
     """
     def __init__(self,  LC_num_classes,
                  static_dim=3, dynamic_dim=16, embed_dim=64, num_heads=4,
-                 num_layers=2, seq_len=10):
+                 num_layers=2, seq_len=3):
         super(TransformerRegressor, self).__init__()
         self.seq_len = seq_len
         self.LC_embedding =nn.Sequential(
@@ -168,7 +175,7 @@ class TransformerRegressor(nn.Module):
         
         nn.Embedding(LC_num_classes, 1)
         self.all_feat_dim = static_dim+dynamic_dim+1
-        self.mambadim = 512
+        self.mambadim = 128
         self.LayerNorm = nn.RMSNorm(self.mambadim)
         self.LayerNorm_embedim = nn.RMSNorm(self.mambadim)
         self.LayerNorm_embedim2 = nn.RMSNorm(embed_dim)
@@ -181,7 +188,8 @@ class TransformerRegressor(nn.Module):
         # 交叉注意力模块
         self.cross_attn_all1 = CrossAttentionModule(embed_dim=embed_dim, num_heads=num_heads)
         self.cross_attn_all2 = CrossAttentionModule(embed_dim=embed_dim, num_heads=num_heads)
-
+        self.cross_attn_all3 = CrossAttentionModule(embed_dim=embed_dim, num_heads=num_heads)
+        self.cross_attn_all4 = CrossAttentionModule(embed_dim=embed_dim, num_heads=num_heads)
         # Transformer Encoder
         # encoder_layer = nn.TransformerEncoderLayer(d_model=self.mambadim, nhead=num_heads, activation='relu', batch_first=True)
         # self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
@@ -190,12 +198,12 @@ class TransformerRegressor(nn.Module):
         # 最终回归层
         self.final_layernorm = nn.RMSNorm(self.all_feat_dim*2)
         self.regressor2 = nn.Sequential(
-            KANLinear(self.all_feat_dim, embed_dim*2 ),
-            KANLinear( embed_dim*2 ,self.all_feat_dim),
-            KANLinear(self.all_feat_dim,1)
+            KANLinear(self.all_feat_dim*self.seq_len, embed_dim*2 ),
+            KANLinear( embed_dim*2 ,self.all_feat_dim*self.seq_len),
+            KANLinear(self.all_feat_dim*self.seq_len,1)
         )
         self.mamba_encoder_64 = FeatureMamba(
-            num_layers=1,
+            num_layers=num_layers,
             mambadim=self.mambadim,
             d_state=16,
             d_conv=4,
@@ -211,7 +219,7 @@ class TransformerRegressor(nn.Module):
             embed_dim=self.all_feat_dim
         )
         self.mamba_encoder1_64 = FeatureMamba(
-            num_layers=1,
+            num_layers=num_layers,
             mambadim=self.mambadim,
             d_state=16,
             d_conv=4,
@@ -219,7 +227,7 @@ class TransformerRegressor(nn.Module):
             embed_dim=embed_dim
         )
         self.mamba_encoder2_64 = FeatureMamba(
-            num_layers=1,
+            num_layers=num_layers,
             mambadim=self.mambadim,
             d_state=16,
             d_conv=4,
@@ -234,6 +242,29 @@ class TransformerRegressor(nn.Module):
             expand=2,
             embed_dim=embed_dim
         )
+        self.mamba_encoder4_64 = FeatureMamba(
+            num_layers=num_layers,
+            mambadim=self.mambadim,
+            d_state=16,
+            d_conv=4,
+            expand=2,
+            embed_dim=embed_dim
+        )
+        self.mambablock_init = MambaEncoder(
+            num_layers=num_layers,
+            mambadim=self.mambadim,
+            d_state=16,
+            d_conv=4,
+            expand=2
+        )
+        
+        self.mambablock_fianl= MambaEncoder(
+            num_layers=num_layers,
+            mambadim=self.all_feat_dim,
+            d_state=16,
+            d_conv=4,
+            expand=2
+        )
     
     
         self.dynamic_embed = nn.Sequential(
@@ -247,7 +278,8 @@ class TransformerRegressor(nn.Module):
             KANLinear(self.all_feat_dim,embed_dim)
         )
 
-
+        self.RMSNorm_embed_dim = nn.RMSNorm(embed_dim)
+        self.RMSNorm_final = nn.RMSNorm(self.all_feat_dim)
         self.tmpembed = KANLinear(1,self.mambadim)
         self.tmpembed_t = KANLinear(self.mambadim,1)
         
@@ -256,16 +288,22 @@ class TransformerRegressor(nn.Module):
 
         
         self.LC_Encoder= KANLinear(1,embed_dim)
+        
+        self.year_embedding = KANLinear(1, 4)  # 根据数据调整num_embeddings
+        self.timeEncoder = KANLinear(6,embed_dim)
+        self.timeRMSNorm =nn.RMSNorm(embed_dim)
 
-    def forward(self, x, lat, lon, static_features):
+    def forward(self, x, lat, lon, static_features,year,month):
         """
         x: [batch_size, seq_len, dynamic_dim] - 动态特征
         lat: [batch_size, 1] - 纬度
         lon: [batch_size, 1] - 经度
         static_features: [batch_size, static_dim] - 静态特征 (DEM, aspect)
         """
+       
         #
         batch_size = x.size(0)
+        seq = x.size(1)
         LC  = x[:, :, -1].long()
         x= x[:,:,:-1]
         LC=self.LC_embedding(LC)
@@ -276,12 +314,34 @@ class TransformerRegressor(nn.Module):
         pos_embed = self.position_encoder(lat, lon)  # [batch_size, embed_dim]
         # 取静态特征嵌入
         static_embed = self.static_encoder(static_features)  # [batch_size, embed_dim]
+        # 时间日期嵌入
+
+        year = year.view(batch_size,seq,1)
+        year_embed = self.year_embedding(year)
+        month_cos = torch.cos(2 * torch.pi * month.float() / 2024).unsqueeze(-1)  # [batch_size, 1]
+        month_sin = torch.sin(2 * torch.pi * month.float() / 2024).unsqueeze(-1)  # [batch_size, 1]
+        
+        
+        
+        # month_embed = self.month_embedding(month)
+        time_embed = torch.cat([year_embed,month_cos,month_sin],dim=-1)
+        time_embed =self.timeRMSNorm(self.timeEncoder(time_embed))
+        
+        
+        
        
         # 编码动态特征
         # 编码动态特征，并融合位置嵌入
         x = torch.cat([x,static_features],dim=-1) # （b,1,20）
+        # sum_feature_maps(x)
+        # visualize_with_umap(x)
         dynamic_encoded = self.mamba_encoder_64(x)
         dynamic_encoded = self.dynamic_embed(dynamic_encoded) #20维度-》embeddim 升维度
+        
+        rsidual = dynamic_encoded
+        dynamic_encoded = self.mambablock_init(dynamic_encoded)+rsidual
+        dynamic_encoded =  self.RMSNorm_embed_dim(dynamic_encoded)
+        
         
     
         # 交叉注意力融合位置嵌入和静态嵌入到动态特征
@@ -290,17 +350,27 @@ class TransformerRegressor(nn.Module):
         #mamab搞一层 
         fused_pos_dy = self.cross_attn_all1(dynamic_encoded,LC,LC)
         fused_pos_dy = self.mamba_encoder1_64(fused_pos_dy)
-        # 动态变量查找静态信息
-        fused_pos_dy =self.cross_attn_all2(fused_pos_dy, static_embed,static_embed)
+        
+        fused_pos_dy = self.cross_attn_all2(fused_pos_dy,time_embed,time_embed)
         fused_pos_dy = self.mamba_encoder2_64(fused_pos_dy)
-        fused_pos_dy = self.cross_attn_all1(fused_pos_dy,pos_embed,pos_embed)
+        # 动态变量查找静态信息
+        fused_pos_dy =self.cross_attn_all3(fused_pos_dy, static_embed,static_embed)
         fused_pos_dy = self.mamba_encoder3_64(fused_pos_dy)
+        
+        fused_pos_dy = self.cross_attn_all4(fused_pos_dy,pos_embed,pos_embed)
+        fused_pos_dy = self.mamba_encoder4_64(fused_pos_dy)
+        
+        
         # 降维
         dynamic_encoded_down = self.dynamic_embed_down(fused_pos_dy)
         dynamic_encoded_down =self.mamba_encoder_final_64(dynamic_encoded_down)
-       
+        residual = dynamic_encoded_down
+        dynamic_encoded_down = self.mambablock_fianl(dynamic_encoded_down)
+        dynamic_encoded_down = self.RMSNorm_final(dynamic_encoded_down+residual)
         # 最终回归
+        dynamic_encoded_down = dynamic_encoded_down.view(batch_size,1,seq*self.all_feat_dim)
         output = self.regressor2(dynamic_encoded_down)  # [batch_size, 1]
         output = output.squeeze(-1)
        
         return output  # [batch_size]
+
