@@ -84,7 +84,9 @@ We acknowledge the following data sources and institutions:
 - [**Qinghai-Tibet Plateau Data Center**](https://data.tpdc.ac.cn/): Provider of high-altitude environmental data [[4]](https://data.tpdc.ac.cn/).  
 - **China Geo-Environmental Monitoring Network**: Geological hazard monitoring system.  
 
-This work also benefits from collaborative frameworks including international flux observation networks and multi-source Earth observation programs.  
-## Special thanks to the developers of the Mamba,EfficentKAN Projiects.
+This work also benefits from collaborative frameworks including international flux observation networks and multi-source Earth observation programs.  **Special thanks to the developers of the Mamba,EfficentKAN Projiects.**
+
+## Result
+![GWSA_resluts](images/Fig10.png "模型结构图")
 
 
