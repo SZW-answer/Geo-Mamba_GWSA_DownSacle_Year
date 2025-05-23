@@ -322,6 +322,28 @@ class TransformerRegressor(nn.Module):
         month_sin = torch.sin(2 * torch.pi * month.float() / 2024).unsqueeze(-1)  # [batch_size, 1]
         
         
+        #   多尺度时间日期嵌入
+
+        # month_cos = torch.cos(2 * torch.pi * month.float() / 12).unsqueeze(-1)  # [batch_size, 1]
+        # month_sin = torch.sin(2 * torch.pi * month.float() / 12).unsqueeze(-1)  # [batch_size, 1]
+        # day_cos = torch.cos(2 * torch.pi * day.float() / 30).unsqueeze(-1)  # [batch_size, 1]
+        # day_sin = torch.sin(2 * torch.pi * day.float() / 30).unsqueeze(-1)  # [batch_size, 1]
+        # hour_cos = torch.cos(2 * torch.pi * hour.float() / 24).unsqueeze(-1)  # [batch_size, 1]
+        # hour_sin = torch.sin(2 * torch.pi * hour.float() / 24).unsqueeze(-1)  # [batch_size, 1]
+        # minutes_cos = torch.cos(2 * torch.pi * minutes.float() / 60).unsqueeze(-1)  # [batch_size, 1]
+        # minutes_sin = torch.sin(2 * torch.pi * minutes.float() / 60).unsqueeze(-1)  # [batch_size, 1]
+        
+        # # month_embed = self.month_embedding(month)
+        # time_embed = torch.cat([month_cos,month_sin,day_cos,day_sin,hour_cos,hour_sin,minutes_cos,minutes_sin],dim=-1)
+        # time_embed =self.timeRMSNorm(self.timeEncoder(time_embed))   # 704 1  8
+        
+        
+        
+        
+        
+        
+        
+        
         
         # month_embed = self.month_embedding(month)
         time_embed = torch.cat([year_embed,month_cos,month_sin],dim=-1)
